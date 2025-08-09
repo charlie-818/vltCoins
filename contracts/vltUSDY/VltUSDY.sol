@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IOracle.sol";
 
 /**
@@ -24,7 +24,7 @@ contract VltUSDY is
     ReentrancyGuardUpgradeable,
     UUPSUpgradeable
 {
-    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20 for IERC20;
 
     // Roles
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -34,7 +34,7 @@ contract VltUSDY is
 
     // Treasury and yield configuration
     IOracle public oracle;
-    IERC20Upgradeable public treasuryAsset; // Tokenized treasury bond
+    IERC20 public treasuryAsset; // Tokenized treasury bond
     uint256 public yieldRate; // Annual yield rate in basis points
     uint256 public lastYieldUpdate;
     uint256 public yieldAccrualPeriod; // Seconds between yield updates
@@ -86,7 +86,7 @@ contract VltUSDY is
         address admin,
         uint256 _yieldRate
     ) public initializer {
-        __ERC4626_init(IERC20Upgradeable(_treasuryAsset));
+        __ERC4626_init(IERC20(_treasuryAsset));
         __ERC20_init("vltUSDY", "vltUSDY");
         __AccessControl_init();
         __Pausable_init();
@@ -101,7 +101,7 @@ contract VltUSDY is
         _grantRole(UPGRADER_ROLE, admin);
 
         // Initialize configuration
-        treasuryAsset = IERC20Upgradeable(_treasuryAsset);
+        treasuryAsset = IERC20(_treasuryAsset);
         oracle = IOracle(_oracle);
         yieldRate = _yieldRate;
         yieldAccrualPeriod = 86400; // 24 hours
@@ -131,7 +131,7 @@ contract VltUSDY is
         }
 
         // Transfer treasury assets from user
-        IERC20Upgradeable(treasuryAsset).safeTransferFrom(msg.sender, address(this), assets);
+        SafeERC20.safeTransferFrom(treasuryAsset, msg.sender, address(this), assets);
 
         // Mint vltUSDY tokens
         _mint(receiver, shares);
@@ -175,7 +175,7 @@ contract VltUSDY is
         _burn(owner, shares);
 
         // Transfer treasury assets to receiver
-        IERC20Upgradeable(treasuryAsset).safeTransfer(receiver, assets);
+        SafeERC20.safeTransfer(treasuryAsset, receiver, assets);
 
         // Update user yield tracking
         _updateUserYield(owner);
@@ -206,7 +206,7 @@ contract VltUSDY is
         }
 
         // Transfer treasury assets from user
-        IERC20Upgradeable(treasuryAsset).safeTransferFrom(msg.sender, address(this), assets);
+        SafeERC20.safeTransferFrom(treasuryAsset, msg.sender, address(this), assets);
 
         // Mint vltUSDY tokens
         _mint(receiver, shares);
@@ -250,7 +250,7 @@ contract VltUSDY is
         _burn(owner, shares);
 
         // Transfer treasury assets to receiver
-        IERC20Upgradeable(treasuryAsset).safeTransfer(receiver, assets);
+        SafeERC20.safeTransfer(treasuryAsset, receiver, assets);
 
         // Update user yield tracking
         _updateUserYield(owner);
@@ -276,7 +276,7 @@ contract VltUSDY is
         totalYieldEarned -= amount;
 
         // Transfer yield as treasury assets
-        IERC20Upgradeable(treasuryAsset).safeTransfer(receiver, amount);
+        SafeERC20.safeTransfer(treasuryAsset, receiver, amount);
 
         emit YieldClaimed(msg.sender, amount);
         return amount;
@@ -367,7 +367,7 @@ contract VltUSDY is
             revert InvalidTreasuryAsset();
         }
         
-        treasuryAsset = IERC20Upgradeable(newTreasuryAsset);
+        treasuryAsset = IERC20(newTreasuryAsset);
         emit TreasuryAssetUpdated(newTreasuryAsset);
     }
 
@@ -450,7 +450,7 @@ contract VltUSDY is
      * @notice Override totalAssets to include yield buffer
      */
     function totalAssets() public view override returns (uint256) {
-        return IERC20Upgradeable(treasuryAsset).balanceOf(address(this)) + yieldBuffer;
+        return IERC20(treasuryAsset).balanceOf(address(this)) + yieldBuffer;
     }
 
     /**

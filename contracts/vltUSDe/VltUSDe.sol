@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/IOracle.sol";
 import "../interfaces/IVault.sol";
 
@@ -25,7 +25,7 @@ contract VltUSDe is
     ReentrancyGuardUpgradeable,
     UUPSUpgradeable
 {
-    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using SafeERC20 for IERC20;
 
     // Roles
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -129,7 +129,6 @@ contract VltUSDe is
 
     /**
      * @notice Mint vltUSDe with ETH collateral
-     * @param collateralAmount Amount of ETH to deposit as collateral
      * @param mintAmount Amount of vltUSDe to mint
      */
     function mintWithETH(uint256 mintAmount) external payable whenNotPaused nonReentrant {
@@ -183,7 +182,7 @@ contract VltUSDe is
         }
 
         // Transfer LSD from user
-        IERC20Upgradeable(lsd).safeTransferFrom(msg.sender, address(this), lsdAmount);
+        SafeERC20.safeTransferFrom(IERC20(lsd), msg.sender, address(this), lsdAmount);
 
         // Update user position
         userCollateral[msg.sender] += lsdAmount;
@@ -285,7 +284,7 @@ contract VltUSDe is
 
         // Unstake and transfer LSD
         _unstakeLSD(lsd, lsdAmount);
-        IERC20Upgradeable(lsd).safeTransfer(msg.sender, lsdAmount);
+        SafeERC20.safeTransfer(IERC20(lsd), msg.sender, lsdAmount);
 
         emit Burned(msg.sender, burnAmount, lsd, lsdAmount);
         emit CollateralWithdrawn(msg.sender, lsd, lsdAmount);
@@ -323,7 +322,7 @@ contract VltUSDe is
             }
         } else {
             _unstakeLSD(collateral, liquidatorReward);
-            IERC20Upgradeable(collateral).safeTransfer(msg.sender, liquidatorReward);
+            SafeERC20.safeTransfer(IERC20(collateral), msg.sender, liquidatorReward);
         }
 
         emit Liquidated(user, collateral, debtAmount, liquidationAmount);

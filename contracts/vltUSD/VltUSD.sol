@@ -3,11 +3,10 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
 import "../interfaces/IOracle.sol";
 
 /**
@@ -23,7 +22,6 @@ contract VltUSD is
     ReentrancyGuardUpgradeable,
     UUPSUpgradeable
 {
-    using CountersUpgradeable for CountersUpgradeable.Counter;
 
     // Roles
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -371,17 +369,19 @@ contract VltUSD is
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
 
     /**
-     * @notice Override transfer to check blacklist
+     * @notice Enforce blacklist on transfers, mints, and burns
      */
-    function _beforeTokenTransfer(
+    function _update(
         address from,
         address to,
-        uint256 amount
+        uint256 value
     ) internal virtual override {
-        super._beforeTokenTransfer(from, to, amount);
-        
-        if (blacklisted[from] || blacklisted[to]) {
+        if (from != address(0) && blacklisted[from]) {
             revert UserBlacklisted();
         }
+        if (to != address(0) && blacklisted[to]) {
+            revert UserBlacklisted();
+        }
+        super._update(from, to, value);
     }
 } 

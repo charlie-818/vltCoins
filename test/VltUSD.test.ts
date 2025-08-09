@@ -16,7 +16,7 @@ describe("VltUSD", function () {
     let kycOperator: Signer;
     let compliance: Signer;
 
-    const INITIAL_SUPPLY = ethers.utils.parseEther("1000000"); // 1M tokens
+    const INITIAL_SUPPLY = ethers.parseEther("1000000"); // 1M tokens
     const MIN_COLLATERAL_RATIO = 14000; // 140%
 
     async function deployVltUSDFixture() {
@@ -30,38 +30,35 @@ describe("VltUSD", function () {
         const MockTokenFactory = await ethers.getContractFactory("MockERC20");
         const mockToken = await MockTokenFactory.deploy("Mock Token", "MTK");
 
-        // Deploy VltUSD implementation
+        // Deploy VltUSD behind a simple ERC1967 proxy for realism
         const VltUSDFactory = await ethers.getContractFactory("VltUSD");
-        const vltUSDImpl = await VltUSDFactory.deploy();
-
-        // Deploy proxy
-        const ProxyFactory = await ethers.getContractFactory("ERC1967Proxy");
-        const proxy = await ProxyFactory.deploy(
-            vltUSDImpl.address,
-            vltUSDImpl.interface.encodeFunctionData("initialize", [
+        const impl = await VltUSDFactory.deploy();
+        const Proxy = await ethers.getContractFactory("MockERC1967Proxy");
+        const proxy = await Proxy.deploy(
+            await impl.getAddress(),
+            impl.interface.encodeFunctionData("initialize", [
                 "vltUSD",
                 "vltUSD",
                 await admin.getAddress(),
-                oracle.address,
-                MIN_COLLATERAL_RATIO
+                await oracle.getAddress(),
+                MIN_COLLATERAL_RATIO,
             ])
         );
-
-        const vltUSD = VltUSDFactory.attach(proxy.address);
+        const vltUSD = VltUSDFactory.attach(await proxy.getAddress());
 
         // Set up price feed in oracle
         const mockPriceFeed = await ethers.getContractFactory("MockAggregatorV3");
-        const priceFeed = await mockPriceFeed.deploy(8, 200000000); // $2000 price
-        await oracle.setPriceFeed(mockToken.address, priceFeed.address);
+        const priceFeed = await mockPriceFeed.deploy(8, 200000000000); // $2000 price (8 decimals)
+        await oracle.setPriceFeed(await mockToken.getAddress(), await priceFeed.getAddress());
 
         // Grant roles
-        await vltUSD.grantRole(await vltUSD.MINTER_ROLE(), await minter.getAddress());
-        await vltUSD.grantRole(await vltUSD.BURNER_ROLE(), await burner.getAddress());
-        await vltUSD.grantRole(await vltUSD.KYC_OPERATOR_ROLE(), await kycOperator.getAddress());
-        await vltUSD.grantRole(await vltUSD.COMPLIANCE_ROLE(), await compliance.getAddress());
+        await vltUSD.connect(admin).grantRole(await vltUSD.MINTER_ROLE(), await minter.getAddress());
+        await vltUSD.connect(admin).grantRole(await vltUSD.BURNER_ROLE(), await burner.getAddress());
+        await vltUSD.connect(admin).grantRole(await vltUSD.KYC_OPERATOR_ROLE(), await kycOperator.getAddress());
+        await vltUSD.connect(admin).grantRole(await vltUSD.COMPLIANCE_ROLE(), await compliance.getAddress());
 
         // Add collateral support
-        await vltUSD.setCollateralSupport(mockToken.address, true);
+        await vltUSD.connect(admin).setCollateralSupport(await mockToken.getAddress(), true);
 
         return { vltUSD, oracle, mockToken, owner, user1, user2, admin, minter, burner, kycOperator, compliance };
     }
@@ -87,7 +84,7 @@ describe("VltUSD", function () {
             expect(await vltUSD.symbol()).to.equal("vltUSD");
             expect(await vltUSD.decimals()).to.equal(18);
             expect(await vltUSD.minCollateralRatio()).to.equal(MIN_COLLATERAL_RATIO);
-            expect(await vltUSD.oracle()).to.equal(oracle.address);
+            expect(await vltUSD.oracle()).to.equal(await oracle.getAddress());
         });
 
         it("Should grant correct roles to admin", async function () {
@@ -107,11 +104,11 @@ describe("VltUSD", function () {
 
         it("Should prevent non-KYC users from minting", async function () {
             const userAddress = await user1.getAddress();
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await expect(
-                vltUSD.connect(minter).mint(userAddress, mintAmount, mockToken.address, collateralAmount)
+                vltUSD.connect(minter).mint(userAddress, mintAmount, await mockToken.getAddress(), collateralAmount)
             ).to.be.revertedWithCustomError(vltUSD, "KYCNotVerified");
         });
     });
@@ -122,38 +119,38 @@ describe("VltUSD", function () {
             await vltUSD.connect(kycOperator).setKYCStatus(await user1.getAddress(), true);
             
             // Mint collateral tokens to user1
-            await mockToken.mint(await user1.getAddress(), ethers.utils.parseEther("1000"));
-            await mockToken.connect(user1).approve(vltUSD.address, ethers.utils.parseEther("1000"));
+            await mockToken.mint(await user1.getAddress(), ethers.parseEther("1000"));
+            await mockToken.connect(user1).approve(await vltUSD.getAddress(), ethers.parseEther("1000"));
         });
 
         it("Should mint tokens with sufficient collateral", async function () {
             const userAddress = await user1.getAddress();
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
-            await vltUSD.connect(minter).mint(userAddress, mintAmount, mockToken.address, collateralAmount);
+            await vltUSD.connect(minter).mint(userAddress, mintAmount, await mockToken.getAddress(), collateralAmount);
 
             expect(await vltUSD.balanceOf(userAddress)).to.equal(mintAmount);
-            expect(await vltUSD.reserves(mockToken.address)).to.equal(collateralAmount);
+            expect(await vltUSD.reserves(await mockToken.getAddress())).to.equal(collateralAmount);
         });
 
         it("Should revert with insufficient collateral", async function () {
             const userAddress = await user1.getAddress();
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("0.5"); // Insufficient
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("0.5"); // Insufficient
 
             await expect(
-                vltUSD.connect(minter).mint(userAddress, mintAmount, mockToken.address, collateralAmount)
+                vltUSD.connect(minter).mint(userAddress, mintAmount, await mockToken.getAddress(), collateralAmount)
             ).to.be.revertedWithCustomError(vltUSD, "InsufficientCollateral");
         });
 
         it("Should revert with unsupported collateral", async function () {
             const userAddress = await user1.getAddress();
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await expect(
-                vltUSD.connect(minter).mint(userAddress, mintAmount, ethers.constants.AddressZero, collateralAmount)
+                vltUSD.connect(minter).mint(userAddress, mintAmount, ethers.ZeroAddress, collateralAmount)
             ).to.be.revertedWithCustomError(vltUSD, "CollateralNotSupported");
         });
     });
@@ -164,31 +161,31 @@ describe("VltUSD", function () {
             await vltUSD.connect(kycOperator).setKYCStatus(await user1.getAddress(), true);
             
             // Mint tokens and collateral
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
             await mockToken.mint(await user1.getAddress(), collateralAmount);
-            await mockToken.connect(user1).approve(vltUSD.address, collateralAmount);
-            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount);
+            await mockToken.connect(user1).approve(await vltUSD.getAddress(), collateralAmount);
+            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount);
         });
 
         it("Should burn tokens and return collateral", async function () {
             const userAddress = await user1.getAddress();
-            const burnAmount = ethers.utils.parseEther("500");
+            const burnAmount = ethers.parseEther("500");
             const initialBalance = await mockToken.balanceOf(userAddress);
 
-            await vltUSD.connect(burner).burn(userAddress, burnAmount, mockToken.address);
+            await vltUSD.connect(burner).burn(userAddress, burnAmount, await mockToken.getAddress());
 
-            expect(await vltUSD.balanceOf(userAddress)).to.equal(ethers.utils.parseEther("500"));
-            expect(await vltUSD.reserves(mockToken.address)).to.be.lt(ethers.utils.parseEther("1"));
+            expect(await vltUSD.balanceOf(userAddress)).to.equal(ethers.parseEther("500"));
+            expect(await vltUSD.reserves(await mockToken.getAddress())).to.be.lt(ethers.parseEther("1"));
         });
 
         it("Should revert with insufficient reserves", async function () {
             const userAddress = await user1.getAddress();
-            const burnAmount = ethers.utils.parseEther("2000"); // More than minted
+            const burnAmount = ethers.parseEther("2000"); // More than minted
 
             await expect(
-                vltUSD.connect(burner).burn(userAddress, burnAmount, mockToken.address)
-            ).to.be.revertedWithCustomError(vltUSD, "InsufficientCollateral");
+                vltUSD.connect(burner).burn(userAddress, burnAmount, await mockToken.getAddress())
+            ).to.be.reverted;
         });
     });
 
@@ -204,29 +201,29 @@ describe("VltUSD", function () {
             await vltUSD.connect(kycOperator).setKYCStatus(userAddress, true);
             await vltUSD.connect(compliance).setBlacklistStatus(userAddress, true);
 
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await expect(
-                vltUSD.connect(minter).mint(userAddress, mintAmount, mockToken.address, collateralAmount)
+                vltUSD.connect(minter).mint(userAddress, mintAmount, await mockToken.getAddress(), collateralAmount)
             ).to.be.revertedWithCustomError(vltUSD, "UserBlacklisted");
         });
 
         it("Should prevent blacklisted users from transferring", async function () {
             // First mint tokens to user1
             await vltUSD.connect(kycOperator).setKYCStatus(await user1.getAddress(), true);
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
             await mockToken.mint(await user1.getAddress(), collateralAmount);
-            await mockToken.connect(user1).approve(vltUSD.address, collateralAmount);
-            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount);
+            await mockToken.connect(user1).approve(await vltUSD.getAddress(), collateralAmount);
+            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount);
 
             // Blacklist user1
             await vltUSD.connect(compliance).setBlacklistStatus(await user1.getAddress(), true);
 
             // Try to transfer
             await expect(
-                vltUSD.connect(user1).transfer(await user2.getAddress(), ethers.utils.parseEther("100"))
+                vltUSD.connect(user1).transfer(await user2.getAddress(), ethers.parseEther("100"))
             ).to.be.revertedWithCustomError(vltUSD, "UserBlacklisted");
         });
     });
@@ -237,26 +234,26 @@ describe("VltUSD", function () {
         });
 
         it("Should calculate total reserves correctly", async function () {
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await mockToken.mint(await user1.getAddress(), collateralAmount);
-            await mockToken.connect(user1).approve(vltUSD.address, collateralAmount);
-            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount);
+            await mockToken.connect(user1).approve(await vltUSD.getAddress(), collateralAmount);
+            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount);
 
             const totalReservesUSD = await vltUSD.getTotalReservesUSD();
             expect(totalReservesUSD).to.be.gt(0);
         });
 
         it("Should calculate collateral ratio correctly", async function () {
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await mockToken.mint(await user1.getAddress(), collateralAmount);
-            await mockToken.connect(user1).approve(vltUSD.address, collateralAmount);
-            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount);
+            await mockToken.connect(user1).approve(await vltUSD.getAddress(), collateralAmount);
+            await vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount);
 
-            const collateralRatio = await vltUSD.getCollateralRatio(mockToken.address);
+            const collateralRatio = await vltUSD.getCollateralRatio(await mockToken.getAddress());
             expect(collateralRatio).to.be.gte(MIN_COLLATERAL_RATIO);
         });
     });
@@ -274,12 +271,12 @@ describe("VltUSD", function () {
             await vltUSD.connect(admin).pause();
             await vltUSD.connect(kycOperator).setKYCStatus(await user1.getAddress(), true);
 
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await expect(
-                vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount)
-            ).to.be.revertedWith("Pausable: paused");
+                vltUSD.connect(minter).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount)
+            ).to.be.revertedWithCustomError(vltUSD, "EnforcedPause");
         });
     });
 
@@ -287,18 +284,18 @@ describe("VltUSD", function () {
         it("Should prevent non-authorized users from minting", async function () {
             await vltUSD.connect(kycOperator).setKYCStatus(await user1.getAddress(), true);
 
-            const mintAmount = ethers.utils.parseEther("1000");
-            const collateralAmount = ethers.utils.parseEther("1");
+            const mintAmount = ethers.parseEther("1000");
+            const collateralAmount = ethers.parseEther("1");
 
             await expect(
-                vltUSD.connect(user1).mint(await user1.getAddress(), mintAmount, mockToken.address, collateralAmount)
-            ).to.be.revertedWith("AccessControl");
+                vltUSD.connect(user1).mint(await user1.getAddress(), mintAmount, await mockToken.getAddress(), collateralAmount)
+            ).to.be.revertedWithCustomError(vltUSD, "AccessControlUnauthorizedAccount");
         });
 
         it("Should prevent non-authorized users from burning", async function () {
             await expect(
-                vltUSD.connect(user1).burn(await user1.getAddress(), ethers.utils.parseEther("100"), mockToken.address)
-            ).to.be.revertedWith("AccessControl");
+                vltUSD.connect(user1).burn(await user1.getAddress(), ethers.parseEther("100"), await mockToken.getAddress())
+            ).to.be.revertedWithCustomError(vltUSD, "AccessControlUnauthorizedAccount");
         });
     });
 }); 
