@@ -8,6 +8,7 @@
     "test": "hardhat test",
     "test:coverage": "hardhat coverage",
     "deploy:sepolia": "hardhat run scripts/deploy/sepolia.ts --network sepolia",
+    "deploy:vltusd:sepolia": "hardhat run scripts/deploy/vltusd.sepolia.ts --network sepolia",
     "deploy:goerli": "hardhat run scripts/deploy/goerli.ts --network goerli",
     "verify:sepolia": "hardhat verify --network sepolia",
     "verify:goerli": "hardhat verify --network goerli",
