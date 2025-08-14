@@ -40,6 +40,40 @@ async function main() {
   console.log("Done. Addresses:")
   console.log("- Oracle:", oracleAddress);
   console.log("- VltUSD:", vltUSDAddress);
+
+  // Basic sanity test: set up mock collateral and mint/burn
+  console.log("\nRunning basic on-chain sanity test for VltUSD...");
+  const MockTokenFactory = await ethers.getContractFactory("MockERC20");
+  const collateral = await MockTokenFactory.deploy("Mock Collateral", "MCOLL");
+  await collateral.waitForDeployment();
+  const collateralAddress = await collateral.getAddress();
+  console.log("Collateral:", collateralAddress);
+
+  const MockAggFactory = await ethers.getContractFactory("MockAggregatorV3");
+  const feed = await MockAggFactory.deploy(8, 2000_00000000); // $2000
+  await feed.waitForDeployment();
+  const feedAddress = await feed.getAddress();
+  console.log("PriceFeed:", feedAddress);
+
+  // Wire oracle and collateral support
+  await (await oracle.setPriceFeed(collateralAddress, feedAddress)).wait();
+  await (await vltUSD.setCollateralSupport(collateralAddress, true)).wait();
+
+  // Mint some collateral to deployer and approve
+  await (await collateral.mint(await deployer.getAddress(), ethers.parseEther("100"))).wait();
+  await (await collateral.approve(vltUSDAddress, ethers.parseEther("100"))).wait();
+
+  // KYC deployer
+  await (await vltUSD.setKYCStatus(await deployer.getAddress(), true)).wait();
+
+  // Mint and burn
+  const mintAmount = ethers.parseEther("10");
+  const collateralDeposit = ethers.parseEther("1");
+  await (await vltUSD.mint(await deployer.getAddress(), mintAmount, collateralAddress, collateralDeposit)).wait();
+  console.log("Minted", mintAmount.toString(), "vltUSD to", await deployer.getAddress());
+
+  await (await vltUSD.burn(await deployer.getAddress(), ethers.parseEther("1"), collateralAddress)).wait();
+  console.log("Burned 1 vltUSD");
 }
 
 main().catch((e) => {

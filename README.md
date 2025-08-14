@@ -1,4 +1,7 @@
 # vltCoins - Interconnected Ethereum-Based Stablecoin Suite
+<p align="left">
+  <img src="public/vltUSD.png" alt="vltUSD" width="120" />
+</p>
 
 A comprehensive suite of three interoperable Ethereum-based stablecoins designed for maximum functionality with minimal changes, prioritizing efficiency and security.
 

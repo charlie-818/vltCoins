@@ -1,0 +1,20 @@
+{
+  "$schema": "https://uniswap.org/tokenlist.schema.json",
+  "name": "vltCoins Token List",
+  "logoURI": "./vltUSD.png",
+  "keywords": ["vltCoins", "stablecoin", "sepolia"],
+  "version": { "major": 1, "minor": 0, "patch": 0 },
+  "timestamp": "${DATE}",
+  "tokens": [
+    {
+      "chainId": 11155111,
+      "address": "0x9B616E86c5fB5b4f4096aBa174F0aD0dc79467a8",
+      "name": "vltUSD",
+      "symbol": "vltUSD",
+      "decimals": 18,
+      "logoURI": "./vltUSD.png"
+    }
+  ]
+}
+
+
